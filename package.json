@@ -5,7 +5,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-  "postinstall": "prisma generate || echo Prisma generate skipped",
+    "postinstall": "prisma generate || echo Prisma generate skipped",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
