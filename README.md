@@ -1,105 +1,122 @@
-<a href="https://demo-nextjs-with-supabase.vercel.app/">
-  <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
-  <h1 align="center">Next.js and Supabase Starter Kit</h1>
-</a>
+<h1 align="center">Note Keeper</h1>
 
-<p align="center">
- The fastest way to build apps with Next.js and Supabase
-</p>
-
-<p align="center">
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#demo"><strong>Demo</strong></a> ·
-  <a href="#deploy-to-vercel"><strong>Deploy to Vercel</strong></a> ·
-  <a href="#clone-and-run-locally"><strong>Clone and run locally</strong></a> ·
-  <a href="#feedback-and-issues"><strong>Feedback and issues</strong></a>
-  <a href="#more-supabase-examples"><strong>More Examples</strong></a>
-</p>
-<br/>
+Simple, fast notes with categories. Built with Next.js, Supabase Auth (SSR), and Prisma on PostgreSQL.
 
 ## Features
 
-- Works across the entire [Next.js](https://nextjs.org) stack
-  - App Router
-  - Pages Router
-  - Middleware
-  - Client
-  - Server
-  - It just works!
-- supabase-ssr. A package to configure Supabase Auth to use cookies
-- Password-based authentication block installed via the [Supabase UI Library](https://supabase.com/ui/docs/nextjs/password-based-auth)
-- Styling with [Tailwind CSS](https://tailwindcss.com)
-- Components with [shadcn/ui](https://ui.shadcn.com/)
-- Optional deployment with [Supabase Vercel Integration and Vercel deploy](#deploy-your-own)
-  - Environment variables automatically assigned to Vercel project
+- Next.js App Router with SSR-friendly Supabase auth (cookies/JWT)
+- Notes and Categories CRUD with optimistic UI and local cache
+- Search across title/content/category, debounced for performance
+- Clean UI with TailwindCSS, DaisyUI, and MUI transitions
 
-## Demo
+## Tech Stack
 
-You can view a fully working demo at [demo-nextjs-with-supabase.vercel.app](https://demo-nextjs-with-supabase.vercel.app/).
+- Frontend: Next.js 15, React 19, TailwindCSS + DaisyUI, MUI
+- Auth: Supabase (SSR via `@supabase/ssr`)
+- Data: PostgreSQL (Supabase) + Prisma ORM 6
+- Tooling: TypeScript 5.9, ESLint, pnpm
 
-## Deploy to Vercel
+## Quick Start
 
-Vercel deployment will guide you through creating a Supabase account and project.
+Prerequisites
 
-After installation of the Supabase integration, all relevant environment variables will be assigned to the project so the deployment is fully functioning.
+- Node.js 22.x
+- pnpm 9.x
+- A Supabase project (Auth + Postgres)
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&project-name=nextjs-with-supabase&repository-name=nextjs-with-supabase&demo-title=nextjs-with-supabase&demo-description=This+starter+configures+Supabase+Auth+to+use+cookies%2C+making+the+user%27s+session+available+throughout+the+entire+Next.js+app+-+Client+Components%2C+Server+Components%2C+Route+Handlers%2C+Server+Actions+and+Middleware.&demo-url=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2F&external-id=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&demo-image=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2Fopengraph-image.png)
+1. Install dependencies
 
-The above will also clone the Starter kit to your GitHub, you can clone that locally and develop locally.
+- Clone your repo, then in the project folder:
+  - `pnpm install`
 
-If you wish to just develop locally and not deploy to Vercel, [follow the steps below](#clone-and-run-locally).
+2. Environment variables
+   Create `.env.local` with:
 
-## Clone and run locally
+```ini
+# Supabase (client-side)
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY=your_supabase_anon_key
 
-1. You'll first need a Supabase project which can be made [via the Supabase dashboard](https://database.new)
+# Prisma (database)
+DATABASE_URL=postgresql://user:password@host:port/dbname?sslmode=require
+DIRECT_URL=postgresql://user:password@host:port/dbname?sslmode=require
+```
 
-2. Create a Next.js app using the Supabase Starter template npx command
+3. Prisma
 
-   ```bash
-   npx create-next-app --example with-supabase with-supabase-app
-   ```
+- Generate client: `pnpm prisma:generate`
+- Apply schema: `pnpm prisma:migrate`
 
-   ```bash
-   yarn create next-app --example with-supabase with-supabase-app
-   ```
+4. Run
 
-   ```bash
-   pnpm create next-app --example with-supabase with-supabase-app
-   ```
+- Dev: `pnpm dev` → http://localhost:3000
+- Build: `pnpm build`
+- Prod: `pnpm start`
 
-3. Use `cd` to change into the app's directory
+Tips
 
-   ```bash
-   cd with-supabase-app
-   ```
+- First-time users can initialize preset categories via `POST /api/categories/init`.
+- Local cache makes the UI feel instant; server stays source of truth.
 
-4. Rename `.env.example` to `.env.local` and update the following:
+## API Reference
 
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=[INSERT SUPABASE PROJECT URL]
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=[INSERT SUPABASE PROJECT API ANON KEY]
-   ```
+Auth
 
-   Both `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` can be found in [your Supabase project's API settings](https://supabase.com/dashboard/project/_?showConnect=true)
+- All endpoints require a signed-in user (401 if not signed in).
 
-5. You can now run the Next.js local development server:
+Notes
 
-   ```bash
-   npm run dev
-   ```
+- GET `/api/notes`
+  - Query: `q?`, `categoryIds?` (csv), `searchIn?` (title,content,category)
+  - Response: Note[] with `category`
+- POST `/api/notes`
+  - Body: `{ title: string; content: string; categoryId?: string | null }`
+- PUT `/api/notes/:id`
+  - Body: `{ title?: string; content?: string; categoryId?: string | null }`
+- DELETE `/api/notes/:id`
 
-   The starter kit should now be running on [localhost:3000](http://localhost:3000/).
+Categories
 
-6. This template comes with the default shadcn/ui style initialized. If you instead want other ui.shadcn styles, delete `components.json` and [re-install shadcn/ui](https://ui.shadcn.com/docs/installation/next)
+- GET `/api/categories` → ordered by `sortOrder asc, name asc`
+- POST `/api/categories` → `{ name: string; color?: string; icon?: string }`
+- PUT `/api/categories/:id` → `{ name?, color?, icon?, sortOrder? }`
+- DELETE `/api/categories/:id`
+- POST `/api/categories/reorder` → `{ order: string[] }`
+- POST `/api/categories/init` → `{ created: number }`
 
-> Check out [the docs for Local Development](https://supabase.com/docs/guides/getting-started/local-development) to also run Supabase locally.
+Health
 
-## Feedback and issues
+- GET `/api/health` → checks env presence and DB connectivity
 
-Please file feedback and issues over on the [Supabase GitHub org](https://github.com/supabase/supabase/issues/new/choose).
+Models (Prisma)
 
-## More Supabase examples
+- Note: `{ id, title, content, createdAt, updatedAt, userId, categoryId? }`
+- Category: `{ id, name, color, icon, sortOrder, createdAt, updatedAt, userId }`
 
-- [Next.js Subscription Payments Starter](https://github.com/vercel/nextjs-subscription-payments)
-- [Cookie-based Auth and the Next.js 13 App Router (free course)](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
-- [Supabase Auth and the Next.js App Router](https://github.com/supabase/supabase/tree/master/examples/auth/nextjs)
+## Deploy (Vercel)
+
+Environment Variables
+
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY
+- DATABASE_URL (with `sslmode=require`)
+- DIRECT_URL (with `sslmode=require`)
+
+Build Settings
+
+- Node.js Version: 22.x
+- Package manager: pnpm (lockfile committed)
+- Install Command: `pnpm install --frozen-lockfile`
+- Build Command: `pnpm build`
+
+Notes
+
+- Commit `pnpm-lock.yaml` for reproducible installs.
+- Ensure your Supabase auth Site URL/Redirect URLs include your prod domain.
+
+## Troubleshooting
+
+- 401 Unauthorized: Login required, verify Supabase envs and cookies.
+- Database errors: Check `DATABASE_URL`/`DIRECT_URL` and SSL params.
+- Vercel pnpm meta fetch errors: Commit `pnpm-lock.yaml`, use pnpm 9 and Node 22.
+- Health check: `/api/health` in prod to inspect env and DB connectivity.
