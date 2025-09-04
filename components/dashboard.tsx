@@ -121,6 +121,8 @@ export function Dashboard() {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewNote, setViewNote] = useState<Note | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(
     null
   );
@@ -304,10 +306,19 @@ export function Dashboard() {
   };
 
   const removeNote = async (note: Note) => {
-    if (!confirm('Delete note?')) return;
-    const res = await fetch(`/api/notes/${note.id}`, { method: 'DELETE' });
+    setNoteToDelete(note);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteNote = async () => {
+    if (!noteToDelete) return;
+    const res = await fetch(`/api/notes/${noteToDelete.id}`, {
+      method: 'DELETE',
+    });
     if (!res.ok) return toast.error('Delete failed');
     toast.success('Note removed');
+    setShowDeleteModal(false);
+    setNoteToDelete(null);
     await fetchAll();
   };
 
@@ -537,6 +548,58 @@ export function Dashboard() {
                     }}
                   >
                     Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Fade>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && noteToDelete && (
+        <Fade in={showDeleteModal}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="card w-full max-w-md bg-base-100 shadow-2xl border border-base-300 animate-in zoom-in-90 duration-300">
+              <div className="card-body p-6 text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="w-16 h-16 bg-error/20 rounded-full flex items-center justify-center">
+                    <svg
+                      className="w-8 h-8 text-error"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </div>
+                </div>
+
+                <h3 className="text-lg font-semibold mb-2">Delete Note</h3>
+                <p className="text-base-content/70 mb-1">
+                  Are you sure you want to delete this note?
+                </p>
+                <p className="font-medium text-sm mb-6">
+                  &ldquo;{noteToDelete.title}&rdquo;
+                </p>
+
+                <div className="flex gap-3 justify-center">
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      setShowDeleteModal(false);
+                      setNoteToDelete(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button className="btn btn-error" onClick={confirmDeleteNote}>
+                    Delete
                   </button>
                 </div>
               </div>
