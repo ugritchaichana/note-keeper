@@ -37,6 +37,7 @@ import {
 import { MuiThemeProvider } from './mui-theme-provider';
 import { GithubPicker } from 'react-color';
 import { PRESET_CATEGORIES } from '@/lib/presets';
+import { getJSON, setJSON } from '@/lib/cache';
 
 // Types
 export type Category = {
@@ -155,6 +156,10 @@ export function Dashboard() {
     | 'Hobbies'
     | 'Food'
   >('Custom');
+  // simple inline state for category deletion confirm
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(
+    null
+  );
 
   // Map current draftNote.categoryId (DB id) to its preset key for the selects
   const selectedPresetKey = useMemo(() => {
@@ -164,6 +169,14 @@ export function Dashboard() {
     const match = PRESET_CATEGORIES.find((p) => p.name === cat.name);
     return match ? match.key : '';
   }, [draftNote.categoryId, categories]);
+
+  // Load cached data immediately for perceived performance
+  useEffect(() => {
+    const cachedNotes = getJSON<Note[]>('notes');
+    const cachedCats = getJSON<Category[]>('categories');
+    if (cachedNotes) setNotes(cachedNotes);
+    if (cachedCats) setCategories(cachedCats);
+  }, []);
 
   const fetchAll = async () => {
     try {
@@ -185,6 +198,9 @@ export function Dashboard() {
       }
       setNotes(notesData);
       setCategories(catsData);
+      // write-through cache
+      setJSON('notes', notesData);
+      setJSON('categories', catsData);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Load failed';
       toast.error(msg);
@@ -259,6 +275,27 @@ export function Dashboard() {
 
   const submitNote = async () => {
     if (!draftNote.title) return toast.error('Title is required');
+    // optimistic add
+    const tempId = `temp-${Date.now()}`;
+    const optimistic: Note = {
+      id: tempId,
+      title: draftNote.title,
+      content: draftNote.content,
+      categoryId: draftNote.categoryId || undefined,
+      category: draftNote.categoryId
+        ? categories.find((c) => c.id === draftNote.categoryId) || null
+        : null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setNotes((prev) => {
+      const next = [optimistic, ...prev];
+      setJSON('notes', next);
+      return next;
+    });
+    setShowNoteModal(false);
+    setDraftNote({ title: '', content: '', categoryId: '' });
+
     const res = await fetch('/api/notes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -268,11 +305,25 @@ export function Dashboard() {
         categoryId: draftNote.categoryId || null,
       }),
     });
-    if (!res.ok) return toast.error('Create note failed');
+    if (!res.ok) {
+      // rollback
+      setNotes((prev) => {
+        const next = prev.filter((n) => n.id !== tempId);
+        setJSON('notes', next);
+        return next;
+      });
+      return toast.error('Create note failed');
+    }
+    const created = (await res.json()) as Note;
+    // reconcile temp -> real
+    setNotes((prev) => {
+      const next = prev.map((n) =>
+        n.id === tempId ? { ...created, category: optimistic.category } : n
+      );
+      setJSON('notes', next);
+      return next;
+    });
     toast.success('Note created');
-    setShowNoteModal(false);
-    setDraftNote({ title: '', content: '', categoryId: '' });
-    await fetchAll();
   };
 
   const updateNote = async (note: Note) => {
@@ -288,6 +339,27 @@ export function Dashboard() {
   const submitEditNote = async () => {
     if (!editingNote || !draftNote.title)
       return toast.error('Title is required');
+    // optimistic update
+    const prevSnapshot = notes.slice();
+    const nextCategory = draftNote.categoryId
+      ? categories.find((c) => c.id === draftNote.categoryId) || null
+      : null;
+    setNotes((prev) => {
+      const next = prev.map((n) =>
+        n.id === editingNote.id
+          ? {
+              ...n,
+              title: draftNote.title,
+              content: draftNote.content,
+              categoryId: draftNote.categoryId || undefined,
+              category: nextCategory,
+              updatedAt: new Date().toISOString(),
+            }
+          : n
+      );
+      setJSON('notes', next);
+      return next;
+    });
     const res = await fetch(`/api/notes/${editingNote.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -297,12 +369,16 @@ export function Dashboard() {
         categoryId: draftNote.categoryId || null,
       }),
     });
-    if (!res.ok) return toast.error('Update failed');
+    if (!res.ok) {
+      // rollback
+      setNotes(prevSnapshot);
+      setJSON('notes', prevSnapshot);
+      return toast.error('Update failed');
+    }
     toast.success('Note updated');
     setShowEditModal(false);
     setEditingNote(null);
     setDraftNote({ title: '', content: '', categoryId: '' });
-    await fetchAll();
   };
 
   const removeNote = async (note: Note) => {
@@ -312,14 +388,25 @@ export function Dashboard() {
 
   const confirmDeleteNote = async () => {
     if (!noteToDelete) return;
+    // optimistic remove
+    const prevSnapshot = notes.slice();
+    setNotes((prev) => {
+      const next = prev.filter((n) => n.id !== noteToDelete.id);
+      setJSON('notes', next);
+      return next;
+    });
     const res = await fetch(`/api/notes/${noteToDelete.id}`, {
       method: 'DELETE',
     });
-    if (!res.ok) return toast.error('Delete failed');
+    if (!res.ok) {
+      // rollback
+      setNotes(prevSnapshot);
+      setJSON('notes', prevSnapshot);
+      return toast.error('Delete failed');
+    }
     toast.success('Note removed');
     setShowDeleteModal(false);
     setNoteToDelete(null);
-    await fetchAll();
   };
 
   return (
@@ -960,6 +1047,21 @@ export function Dashboard() {
                   <button
                     className="btn btn-accent gap-2 transition-all duration-200 hover:scale-105"
                     onClick={async () => {
+                      if (!editingCategoryId) return;
+                      // optimistic update
+                      const prevCats = categories.slice();
+                      const updatedCats = categories.map((c) =>
+                        c.id === editingCategoryId
+                          ? {
+                              ...c,
+                              name: draftCategory.name,
+                              color: draftCategory.color,
+                              icon: iconDraft,
+                            }
+                          : c
+                      );
+                      setCategories(updatedCats);
+                      setJSON('categories', updatedCats);
                       const res = await fetch(
                         `/api/categories/${editingCategoryId}`,
                         {
@@ -972,14 +1074,17 @@ export function Dashboard() {
                           }),
                         }
                       );
-                      if (!res.ok) return toast.error('Update failed');
+                      if (!res.ok) {
+                        setCategories(prevCats);
+                        setJSON('categories', prevCats);
+                        return toast.error('Update failed');
+                      }
                       toast.success('Category updated');
                       setShowCategoryModal(false);
                       setEditingCategoryId(null);
                       setDraftCategory({ name: '', color: '#6366f1' });
                       setIconDraft('Tag');
                       setPreset('Custom');
-                      await fetchAll();
                     }}
                     disabled={!draftCategory.name.trim()}
                   >
@@ -1102,17 +1207,7 @@ export function Dashboard() {
                             </button>
                             <button
                               className="btn btn-ghost btn-xs join-item text-error"
-                              onClick={async () => {
-                                if (!confirm('Delete this category?')) return;
-                                const res = await fetch(
-                                  `/api/categories/${c!.id}`,
-                                  { method: 'DELETE' }
-                                );
-                                if (!res.ok)
-                                  return toast.error('Delete failed');
-                                toast.success('Category removed');
-                                await fetchAll();
-                              }}
+                              onClick={() => setCategoryToDelete(c!)}
                             >
                               Delete
                             </button>
@@ -1129,20 +1224,102 @@ export function Dashboard() {
                     <button
                       className="btn btn-primary"
                       onClick={async () => {
-                        await fetch('/api/categories/reorder', {
+                        // optimistic reorder
+                        const prevCats = categories.slice();
+                        const reordered = orderDraft
+                          .map((id) => categories.find((c) => c.id === id)!)
+                          .filter(Boolean)
+                          .map((c, idx) => ({ ...c, sortOrder: idx }));
+                        setCategories(reordered);
+                        setJSON('categories', reordered);
+                        const res = await fetch('/api/categories/reorder', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ order: orderDraft }),
                         });
+                        if (!res.ok) {
+                          setCategories(prevCats);
+                          setJSON('categories', prevCats);
+                          return toast.error('Save order failed');
+                        }
                         toast.success('Order saved');
                         setIsReordering(false);
-                        await fetchAll();
                       }}
                     >
                       Save Order
                     </button>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        </Fade>
+      )}
+
+      {/* Delete Category Confirmation Modal */}
+      {categoryToDelete && (
+        <Fade in={!!categoryToDelete}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="card w-full max-w-md bg-base-100 shadow-2xl border border-base-300 animate-in zoom-in-90 duration-300">
+              <div className="card-body p-6 text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="w-16 h-16 bg-error/20 rounded-full flex items-center justify-center">
+                    <svg
+                      className="w-8 h-8 text-error"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </div>
+                </div>
+                <h3 className="text-lg font-semibold mb-2">Delete Category</h3>
+                <p className="text-base-content/70 mb-1">
+                  Are you sure you want to delete this category?
+                </p>
+                <p className="font-medium text-sm mb-6">
+                  &ldquo;{categoryToDelete.name}&rdquo;
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => setCategoryToDelete(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn btn-error"
+                    onClick={async () => {
+                      const target = categoryToDelete;
+                      if (!target) return;
+                      // optimistic remove
+                      const prevCats = categories.slice();
+                      const nextCats = categories.filter(
+                        (c) => c.id !== target.id
+                      );
+                      setCategories(nextCats);
+                      setJSON('categories', nextCats);
+                      setCategoryToDelete(null);
+                      const res = await fetch(`/api/categories/${target.id}`, {
+                        method: 'DELETE',
+                      });
+                      if (!res.ok) {
+                        setCategories(prevCats);
+                        setJSON('categories', prevCats);
+                        return toast.error('Delete failed');
+                      }
+                      toast.success('Category removed');
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </div>
           </div>
