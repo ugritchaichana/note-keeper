@@ -1,8 +1,9 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { hasEnvVars } from "../utils";
 
 export async function updateSession(request: NextRequest) {
+  // Lazily import to avoid bundling browser client code in Edge builds
+  const { createServerClient } = await import("@supabase/ssr");
   let supabaseResponse = NextResponse.next({
     request,
   });
