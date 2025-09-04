@@ -15,7 +15,7 @@ export async function POST() {
     where: { userId: user.id },
     select: { id: true, name: true },
   });
-  const existingNames = new Set(existing.map((c) => c.name));
+  const existingNames = new Set(existing.map((c: { id: string; name: string }) => c.name));
 
   // Create any missing presets
   const toCreate = PRESET_CATEGORIES.filter((p) => !existingNames.has(p.name));
