@@ -2,6 +2,7 @@ import { ThemeSwitcher } from '@/components/theme-switcher';
 import { LogoutButton } from '@/components/logout-button';
 import { AuthModal } from '@/components/auth-modal';
 import { createClient } from '@/lib/supabase/server';
+import { Dashboard } from '@/components/dashboard';
 
 export default async function Home() {
   const supabase = await createClient();
@@ -39,12 +40,13 @@ export default async function Home() {
             isLoggedIn ? '' : 'blur-sm pointer-events-none select-none'
           }`}
         >
-          {/* Replace with your main content */}
-          <div className="py-12 text-center text-foreground/70">
-            {isLoggedIn
-              ? "You're logged in. Start taking notes!"
-              : 'Please sign in to continue'}
-          </div>
+          {isLoggedIn ? (
+            <Dashboard />
+          ) : (
+            <div className="py-12 text-center text-foreground/70">
+              Please sign in to continue
+            </div>
+          )}
         </div>
         {/* Auth modal overlay when not logged in */}
         {!isLoggedIn && <AuthModal open={!isLoggedIn} />}

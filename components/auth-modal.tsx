@@ -13,6 +13,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useRouter } from 'next/navigation';
+import { toast } from 'react-toastify';
 import Link from 'next/link';
 
 type Mode = 'login' | 'signup';
@@ -41,6 +42,7 @@ export function AuthModal({ open }: { open: boolean }) {
         password,
       });
       if (error) throw error;
+      toast.success('Logged in successfully');
       router.refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -67,14 +69,18 @@ export function AuthModal({ open }: { open: boolean }) {
       if (error) throw error;
       if (data.session) {
         // Email confirmations disabled -> session ready
+        toast.success('Account created');
         router.refresh();
       } else {
         // No session returned (email confirmations likely enabled in dashboard)
-        setInfo('Account created. Please Comfirm your email and login.');
+        setInfo('Account created. Please login.');
+        toast.info('Account created. Please login.');
         setMode('login');
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Sign up failed');
+      const msg = err instanceof Error ? err.message : 'Sign up failed';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }

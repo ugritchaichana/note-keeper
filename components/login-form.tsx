@@ -1,5 +1,7 @@
 'use client';
 
+import { toast } from 'react-toastify';
+
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -38,10 +40,13 @@ export function LoginForm({
         password,
       });
       if (error) throw error;
+      toast.success('Logged in successfully');
       // Redirect to home after successful login
       router.push('/');
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'An error occurred');
+      const msg = error instanceof Error ? error.message : 'An error occurred';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
