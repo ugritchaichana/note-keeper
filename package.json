@@ -1,5 +1,10 @@
 {
   "private": true,
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": "22.x",
+    "pnpm": ">=9 <10"
+  },
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
