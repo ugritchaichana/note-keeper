@@ -39,7 +39,7 @@ export async function DELETE(
   if (!user)
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   await prisma.note.delete({
-    where: { id, userId: user.id } as any,
+    where: { id, userId: user.id },
   });
   return NextResponse.json({ ok: true });
 }

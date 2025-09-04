@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { Geist } from 'next/font/google';
-import { ThemeProvider } from 'next-themes';
 import './globals.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -28,20 +27,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.className} antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-          <ToastContainer
-            position="top-right"
-            autoClose={3000}
-            theme="colored"
-          />
-        </ThemeProvider>
+      <body className={`${geistSans.className} antialiased dark`}>
+        {children}
+        <ToastContainer position="top-right" autoClose={3000} theme="colored" />
       </body>
     </html>
   );

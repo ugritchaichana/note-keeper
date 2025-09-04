@@ -27,7 +27,11 @@ export async function GET(req: Request) {
       .filter(Boolean)
   );
 
-  const orClauses: any[] = [];
+  const orClauses: Array<{
+    title?: { contains: string; mode: 'insensitive' };
+    content?: { contains: string; mode: 'insensitive' };
+    category?: { name: { contains: string; mode: 'insensitive' } };
+  }> = [];
   if (q) {
     if (searchIn.has('title')) {
       orClauses.push({ title: { contains: q, mode: 'insensitive' } });
@@ -42,15 +46,18 @@ export async function GET(req: Request) {
     }
   }
 
+  const whereConditions = [];
+  if (categoryIds.length > 0) {
+    whereConditions.push({ categoryId: { in: categoryIds } });
+  }
+  if (q && orClauses.length > 0) {
+    whereConditions.push({ OR: orClauses });
+  }
+
   const notes = await prisma.note.findMany({
     where: {
       userId: user.id,
-      AND: [
-        categoryIds.length > 0
-          ? { categoryId: { in: categoryIds } }
-          : undefined,
-        q && orClauses.length > 0 ? { OR: orClauses } : undefined,
-      ].filter(Boolean) as any,
+      AND: whereConditions.length > 0 ? whereConditions : undefined,
     },
     include: { category: true },
     orderBy: { updatedAt: 'desc' },

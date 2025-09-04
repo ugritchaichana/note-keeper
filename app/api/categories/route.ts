@@ -10,7 +10,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const categories = await prisma.category.findMany({
     where: { userId: user.id },
-    orderBy: { name: 'asc' },
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
   });
   return NextResponse.json(categories);
 }
@@ -21,12 +21,18 @@ export async function POST(req: Request) {
   const user = data.user;
   if (!user)
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { name, color } = (await req.json()) as {
+  const { name, color, icon } = (await req.json()) as {
     name: string;
     color?: string;
+    icon?: string;
   };
   const category = await prisma.category.create({
-    data: { name, color: color ?? '#a3a3a3', userId: user.id },
+    data: {
+      name,
+      color: color ?? '#a3a3a3',
+      icon: icon ?? 'Tag',
+      userId: user.id,
+    },
   });
   return NextResponse.json(category, { status: 201 });
 }

@@ -16,13 +16,15 @@ export async function PUT(
   const user = await ensureUser();
   if (!user)
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { name, color } = (await req.json()) as {
+  const { name, color, icon, sortOrder } = (await req.json()) as {
     name?: string;
     color?: string;
+    icon?: string;
+    sortOrder?: number;
   };
   const category = await prisma.category.update({
-    where: { id, userId: user.id } as any,
-    data: { name, color },
+    where: { id, userId: user.id },
+    data: { name, color, icon, sortOrder },
   });
   return NextResponse.json(category);
 }
@@ -36,7 +38,7 @@ export async function DELETE(
   if (!user)
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   await prisma.category.delete({
-    where: { id, userId: user.id } as any,
+    where: { id, userId: user.id },
   });
   return NextResponse.json({ ok: true });
 }

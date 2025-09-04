@@ -1,4 +1,3 @@
-import { ThemeSwitcher } from '@/components/theme-switcher';
 import { LogoutButton } from '@/components/logout-button';
 import { AuthModal } from '@/components/auth-modal';
 import { createClient } from '@/lib/supabase/server';
@@ -16,7 +15,9 @@ export default async function Home() {
       {/* Top Nav */}
       <nav className="w-full border-b border-b-foreground/10 h-16">
         <div className="w-full max-w-5xl mx-auto h-full flex justify-between items-center px-5 text-sm">
-          <div className="font-semibold">NoteKeeper</div>
+          <div className="font-bold text-2xl bg-gradient-to-r from-gray-700 via-gray-400 to-white bg-clip-text text-transparent animate-pulse [animation-duration:3s]">
+            NoteKeeper.
+          </div>
           <div className="flex items-center gap-3">
             {isLoggedIn ? (
               <>
@@ -28,7 +29,7 @@ export default async function Home() {
             ) : (
               <span className="text-foreground/60 text-sm">Welcome</span>
             )}
-            <ThemeSwitcher />
+            {/* Theme system removed: fixed dark theme */}
           </div>
         </div>
       </nav>
