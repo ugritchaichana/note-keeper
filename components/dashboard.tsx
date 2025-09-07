@@ -35,25 +35,22 @@ import {
   InputLabel,
 } from '@mui/material';
 import { MuiThemeProvider } from './mui-theme-provider';
-import { GithubPicker } from 'react-color';
 import { PRESET_CATEGORIES } from '@/lib/presets';
 import { getJSON, setJSON } from '@/lib/cache';
 
 // Types
+// Categories are client-side presets; Note stores category name string
 export type Category = {
-  id: string;
   name: string;
   color: string;
   icon?: string;
-  sortOrder?: number;
 };
 
 export type Note = {
   id: string;
   title: string;
   content: string;
-  categoryId?: string | null;
-  category?: Category | null;
+  category?: string | null; // category name
   updatedAt?: string;
   createdAt?: string;
 };
@@ -109,98 +106,61 @@ const formatDateTime = (iso?: string) => {
 
 export function Dashboard() {
   const [notes, setNotes] = useState<Note[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
   const [showNoteModal, setShowNoteModal] = useState(false);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [showCategoryManager, setShowCategoryManager] = useState(false);
-  const [isReordering, setIsReordering] = useState(false);
-  const [orderDraft, setOrderDraft] = useState<string[]>([]);
-  const [iconDraft, setIconDraft] = useState<IconKey>('Tag');
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewNote, setViewNote] = useState<Note | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
-  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(
-    null
-  );
   const [draftNote, setDraftNote] = useState<{
     title: string;
     content: string;
-    categoryId: string | '';
+    category: string;
   }>({
     title: '',
     content: '',
-    categoryId: '',
+    category: '',
   });
-  const [draftCategory, setDraftCategory] = useState<{
-    name: string;
-    color: string;
-  }>({
-    name: '',
-    color: '#6366f1',
-  });
-  const [preset, setPreset] = useState<
-    | 'Custom'
-    | 'Learning'
-    | 'Work'
-    | 'Personal'
-    | 'Family'
-    | 'Activities'
-    | 'Health'
-    | 'Finance'
-    | 'Travel'
-    | 'Hobbies'
-    | 'Food'
-  >('Custom');
-  // simple inline state for category deletion confirm
-  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(
-    null
-  );
+  // Category deletion disabled – no state needed
 
-  // Map current draftNote.categoryId (DB id) to its preset key for the selects
+  // Map current draftNote.category (name) to its preset key for the selects
   const selectedPresetKey = useMemo(() => {
-    if (!draftNote.categoryId) return '';
-    const cat = categories.find((c) => c.id === draftNote.categoryId);
-    if (!cat) return '';
-    const match = PRESET_CATEGORIES.find((p) => p.name === cat.name);
+    if (!draftNote.category) return '';
+    const match = PRESET_CATEGORIES.find((p) => p.name === draftNote.category);
     return match ? match.key : '';
-  }, [draftNote.categoryId, categories]);
+  }, [draftNote.category]);
 
   // Load cached data immediately for perceived performance
   useEffect(() => {
     const cachedNotes = getJSON<Note[]>('notes');
-    const cachedCats = getJSON<Category[]>('categories');
     if (cachedNotes) setNotes(cachedNotes);
-    if (cachedCats) setCategories(cachedCats);
   }, []);
 
   const fetchAll = async () => {
     try {
-      const [notesRes, catsRes] = await Promise.all([
+      const [notesRes] = await Promise.all([
         fetch(`/api/notes?q=${encodeURIComponent(q)}`),
-        fetch(`/api/categories`),
       ]);
-      if (!notesRes.ok) throw new Error('Failed to load notes');
-      if (!catsRes.ok) throw new Error('Failed to load categories');
-      const notesData = await notesRes.json();
-      let catsData = await catsRes.json();
-      // Auto-initialize preset categories if none exist yet
-      if (Array.isArray(catsData) && catsData.length === 0) {
-        await fetch('/api/categories/init', { method: 'POST' });
-        const catsRes2 = await fetch(`/api/categories`);
-        if (catsRes2.ok) {
-          catsData = await catsRes2.json();
+      if (!notesRes.ok) {
+        // Only show error toast for actual server errors, not for empty results
+        if (notesRes.status >= 500) {
+          throw new Error('Failed to load notes');
+        } else if (notesRes.status === 401) {
+          throw new Error('Unauthorized');
+        } else {
+          // For other errors like 404, just set empty array
+          setNotes([]);
+          setJSON('notes', []);
+          return;
         }
       }
+      const notesData = await notesRes.json();
       setNotes(notesData);
-      setCategories(catsData);
       // write-through cache
       setJSON('notes', notesData);
-      setJSON('categories', catsData);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Load failed';
       toast.error(msg);
@@ -230,45 +190,18 @@ export function Dashboard() {
   const selectCategoryByIdOrPreset = async (value: string) => {
     // Empty selection
     if (!value) {
-      setDraftNote((d) => ({ ...d, categoryId: '' }));
-      return;
-    }
-    // If matches an existing category id, just select
-    const existing = categories.find((c) => c.id === value);
-    if (existing) {
-      setDraftNote((d) => ({ ...d, categoryId: existing.id }));
+      setDraftNote((d) => ({ ...d, category: '' }));
       return;
     }
     // Otherwise treat value as preset key; find preset details
     const presetMeta = PRESET_CATEGORIES.find((p) => p.key === value);
     if (!presetMeta) {
       // Fallback: set as none
-      setDraftNote((d) => ({ ...d, categoryId: '' }));
+      setDraftNote((d) => ({ ...d, category: '' }));
       return;
     }
-    // If a category with same name already exists (from DB), use it
-    const sameName = categories.find((c) => c.name === presetMeta.name);
-    if (sameName) {
-      setDraftNote((d) => ({ ...d, categoryId: sameName.id }));
-      return;
-    }
-    // Presets missing: try to initialize them, then retry mapping
-    try {
-      await fetch('/api/categories/init', { method: 'POST' });
-      const res = await fetch('/api/categories');
-      if (res.ok) {
-        const cats: Category[] = await res.json();
-        setCategories(cats);
-        const byName = cats.find((c) => c.name === presetMeta.name);
-        if (byName) {
-          setDraftNote((d) => ({ ...d, categoryId: byName.id }));
-          return;
-        }
-      }
-      toast.error('Preset categories are not initialized.');
-    } catch {
-      toast.error('Preset categories are not initialized.');
-    }
+    // Just set category name directly
+    setDraftNote((d) => ({ ...d, category: presetMeta.name }));
   };
 
   // Note: Category creation has been removed; modal is edit-only now.
@@ -281,10 +214,7 @@ export function Dashboard() {
       id: tempId,
       title: draftNote.title,
       content: draftNote.content,
-      categoryId: draftNote.categoryId || undefined,
-      category: draftNote.categoryId
-        ? categories.find((c) => c.id === draftNote.categoryId) || null
-        : null,
+      category: draftNote.category || null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -294,7 +224,7 @@ export function Dashboard() {
       return next;
     });
     setShowNoteModal(false);
-    setDraftNote({ title: '', content: '', categoryId: '' });
+    setDraftNote({ title: '', content: '', category: '' });
 
     const res = await fetch('/api/notes', {
       method: 'POST',
@@ -302,7 +232,7 @@ export function Dashboard() {
       body: JSON.stringify({
         title: draftNote.title,
         content: draftNote.content,
-        categoryId: draftNote.categoryId || null,
+        category: draftNote.category || null,
       }),
     });
     if (!res.ok) {
@@ -331,7 +261,7 @@ export function Dashboard() {
     setDraftNote({
       title: note.title,
       content: note.content,
-      categoryId: note.categoryId || '',
+      category: note.category || '',
     });
     setShowEditModal(true);
   };
@@ -341,9 +271,7 @@ export function Dashboard() {
       return toast.error('Title is required');
     // optimistic update
     const prevSnapshot = notes.slice();
-    const nextCategory = draftNote.categoryId
-      ? categories.find((c) => c.id === draftNote.categoryId) || null
-      : null;
+    const nextCategory = draftNote.category || null;
     setNotes((prev) => {
       const next = prev.map((n) =>
         n.id === editingNote.id
@@ -351,7 +279,6 @@ export function Dashboard() {
               ...n,
               title: draftNote.title,
               content: draftNote.content,
-              categoryId: draftNote.categoryId || undefined,
               category: nextCategory,
               updatedAt: new Date().toISOString(),
             }
@@ -366,7 +293,7 @@ export function Dashboard() {
       body: JSON.stringify({
         title: draftNote.title,
         content: draftNote.content,
-        categoryId: draftNote.categoryId || null,
+        category: draftNote.category || null,
       }),
     });
     if (!res.ok) {
@@ -378,7 +305,7 @@ export function Dashboard() {
     toast.success('Note updated');
     setShowEditModal(false);
     setEditingNote(null);
-    setDraftNote({ title: '', content: '', categoryId: '' });
+    setDraftNote({ title: '', content: '', category: '' });
   };
 
   const removeNote = async (note: Note) => {
@@ -487,26 +414,27 @@ export function Dashboard() {
                           {note.title}
                         </span>
                       </h3>
-                      {note.category && (
-                        <div
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 hover:scale-110 flex-shrink-0"
-                          style={{
-                            backgroundColor: hexToRgba(
-                              note.category.color,
-                              0.15
-                            ),
-                            color: note.category.color,
-                          }}
-                        >
-                          {(() => {
-                            const key = (note.category?.icon ||
-                              'Tag') as keyof typeof ICONS;
-                            const Icon = ICONS[key] || Tag;
-                            return <Icon size={14} />;
-                          })()}
-                          <span>{note.category.name}</span>
-                        </div>
-                      )}
+                      {note.category &&
+                        (() => {
+                          const meta = PRESET_CATEGORIES.find(
+                            (p) => p.name === note.category
+                          );
+                          if (!meta) return null;
+                          const Icon =
+                            ICONS[(meta.icon as IconKey) || 'Tag'] || Tag;
+                          return (
+                            <div
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 hover:scale-110 flex-shrink-0"
+                              style={{
+                                backgroundColor: hexToRgba(meta.color, 0.15),
+                                color: meta.color,
+                              }}
+                            >
+                              <Icon size={14} />
+                              <span>{meta.name}</span>
+                            </div>
+                          );
+                        })()}
                     </div>
 
                     {/* Row 2: Time Date */}
@@ -572,12 +500,11 @@ export function Dashboard() {
                           labelId="view-note-category-label"
                           label="Category"
                           value={
-                            (viewNote.category &&
-                              (PRESET_CATEGORIES.find(
-                                (p) => p.name === viewNote.category!.name
-                              )?.key ||
-                                '')) ||
-                            ''
+                            viewNote.category
+                              ? PRESET_CATEGORIES.find(
+                                  (p) => p.name === viewNote.category
+                                )?.key || ''
+                              : ''
                           }
                           disabled
                         >
@@ -765,7 +692,7 @@ export function Dashboard() {
                     className="btn btn-ghost transition-all duration-200 hover:scale-105"
                     onClick={() => {
                       setShowNoteModal(false);
-                      setDraftNote({ title: '', content: '', categoryId: '' });
+                      setDraftNote({ title: '', content: '', category: '' });
                     }}
                   >
                     Cancel
@@ -795,9 +722,7 @@ export function Dashboard() {
                     Edit Note
                   </h2>
                 </div>
-
                 <div className="space-y-4">
-                  {/* Title | Category (7/3) */}
                   <div className="grid grid-cols-10 gap-3 items-start">
                     <div className="col-span-7">
                       <TextField
@@ -833,8 +758,6 @@ export function Dashboard() {
                       </FormControl>
                     </div>
                   </div>
-
-                  {/* Content */}
                   <div className="form-control">
                     <TextField
                       fullWidth
@@ -849,14 +772,13 @@ export function Dashboard() {
                     />
                   </div>
                 </div>
-
                 <div className="card-actions justify-end gap-3 mt-8">
                   <button
                     className="btn btn-ghost transition-all duration-200 hover:scale-105"
                     onClick={() => {
                       setShowEditModal(false);
                       setEditingNote(null);
-                      setDraftNote({ title: '', content: '', categoryId: '' });
+                      setDraftNote({ title: '', content: '', category: '' });
                     }}
                   >
                     Cancel
@@ -875,456 +797,7 @@ export function Dashboard() {
         </Fade>
       )}
 
-      {/* Category Modal (Edit-only) */}
-      {showCategoryModal && editingCategoryId && (
-        <Fade in={showCategoryModal}>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="card w-full max-w-md bg-base-100 shadow-2xl border border-base-300 animate-in zoom-in-90 duration-300">
-              <div className="card-body p-6">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="avatar placeholder">
-                    <div className="bg-accent/10 text-accent rounded-lg w-10 h-10">
-                      <Tag size={20} />
-                    </div>
-                  </div>
-                  <h2 className="card-title text-lg font-semibold">
-                    Edit Category
-                  </h2>
-                </div>
-
-                <div className="space-y-6">
-                  {/* Preset Selector */}
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text font-medium">Preset</span>
-                    </label>
-                    <select
-                      className="select select-bordered w-full"
-                      value={preset}
-                      onChange={(e) => {
-                        const val = e.target.value as typeof preset;
-                        setPreset(val);
-                        if (val === 'Custom') return;
-                        const p = PRESET_CATEGORIES.find((x) => x.key === val);
-                        if (p) {
-                          setDraftCategory({ name: p.name, color: p.color });
-                          setIconDraft(p.icon as IconKey);
-                        }
-                      }}
-                    >
-                      <option value="Custom">Custom</option>
-                      {PRESET_CATEGORIES.map((p) => (
-                        <option key={p.key} value={p.key}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text font-medium">
-                        Category Name
-                      </span>
-                    </label>
-                    <input
-                      type="text"
-                      className="input input-bordered focus:input-accent transition-all duration-200"
-                      placeholder="Enter category name..."
-                      value={draftCategory.name}
-                      disabled={preset !== 'Custom'}
-                      onChange={(e) =>
-                        setDraftCategory((d) => ({
-                          ...d,
-                          name: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text font-medium">
-                        Choose Color
-                      </span>
-                    </label>
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
-                        <div
-                          className="badge"
-                          style={{
-                            backgroundColor: hexToRgba(
-                              draftCategory.color,
-                              0.15
-                            ),
-                            color: draftCategory.color,
-                          }}
-                        >
-                          {(() => {
-                            const Icon = ICONS[iconDraft] || Tag;
-                            return <Icon size={14} className="mr-1" />;
-                          })()}
-                          {draftCategory.name || 'Preview'}
-                        </div>
-                        <div className="font-mono text-sm opacity-70">
-                          {draftCategory.color}
-                        </div>
-                      </div>
-
-                      <div className="overflow-hidden rounded-lg border border-base-300">
-                        <GithubPicker
-                          color={draftCategory.color}
-                          onChange={(color) =>
-                            setDraftCategory((d) => ({
-                              ...d,
-                              color: color.hex,
-                            }))
-                          }
-                          triangle="hide"
-                          width="100%"
-                          colors={[
-                            '#6366f1',
-                            '#8b5cf6',
-                            '#ec4899',
-                            '#ef4444',
-                            '#f97316',
-                            '#f59e0b',
-                            '#eab308',
-                            '#84cc16',
-                            '#22c55e',
-                            '#10b981',
-                            '#06b6d4',
-                            '#0ea5e9',
-                            '#3b82f6',
-                            '#d946ef',
-                            '#f43f5e',
-                            '#64748b',
-                            '#6b7280',
-                            '#374151',
-                          ]}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Icon Picker */}
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text font-medium">Icon</span>
-                    </label>
-                    <select
-                      className="select select-bordered"
-                      value={iconDraft}
-                      disabled={preset !== 'Custom'}
-                      onChange={(e) =>
-                        setIconDraft(e.target.value as keyof typeof ICONS)
-                      }
-                    >
-                      {Object.keys(ICONS).map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="text-xs opacity-60 mt-1">
-                      Uses Lucide icon names
-                    </div>
-                  </div>
-                </div>
-
-                <div className="card-actions justify-end gap-3 mt-8">
-                  <button
-                    className="btn btn-ghost transition-all duration-200 hover:scale-105"
-                    onClick={() => {
-                      setShowCategoryModal(false);
-                      setDraftCategory({ name: '', color: '#6366f1' });
-                      setEditingCategoryId(null);
-                      setIconDraft('Tag');
-                      setPreset('Custom');
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="btn btn-accent gap-2 transition-all duration-200 hover:scale-105"
-                    onClick={async () => {
-                      if (!editingCategoryId) return;
-                      // optimistic update
-                      const prevCats = categories.slice();
-                      const updatedCats = categories.map((c) =>
-                        c.id === editingCategoryId
-                          ? {
-                              ...c,
-                              name: draftCategory.name,
-                              color: draftCategory.color,
-                              icon: iconDraft,
-                            }
-                          : c
-                      );
-                      setCategories(updatedCats);
-                      setJSON('categories', updatedCats);
-                      const res = await fetch(
-                        `/api/categories/${editingCategoryId}`,
-                        {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            name: draftCategory.name,
-                            color: draftCategory.color,
-                            icon: iconDraft,
-                          }),
-                        }
-                      );
-                      if (!res.ok) {
-                        setCategories(prevCats);
-                        setJSON('categories', prevCats);
-                        return toast.error('Update failed');
-                      }
-                      toast.success('Category updated');
-                      setShowCategoryModal(false);
-                      setEditingCategoryId(null);
-                      setDraftCategory({ name: '', color: '#6366f1' });
-                      setIconDraft('Tag');
-                      setPreset('Custom');
-                    }}
-                    disabled={!draftCategory.name.trim()}
-                  >
-                    <Tag size={16} />
-                    Update Category
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Fade>
-      )}
-
-      {/* Category Manager Overlay */}
-      {showCategoryManager && (
-        <Fade in={showCategoryManager}>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="card w-full max-w-3xl bg-base-100 shadow-2xl border border-base-300 animate-in zoom-in-90 duration-300">
-              <div className="card-body p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="card-title">Manage Categories</h2>
-                  <div className="join">
-                    <button
-                      className="btn btn-secondary btn-sm join-item"
-                      onClick={() => setShowCategoryModal(true)}
-                    >
-                      <Plus size={14} />
-                      New
-                    </button>
-                    <button
-                      className={`btn btn-sm join-item ${
-                        isReordering ? 'btn-warning' : 'btn-outline'
-                      }`}
-                      onClick={() => {
-                        setIsReordering((v) => !v);
-                        setOrderDraft(categories.map((c) => c.id));
-                      }}
-                    >
-                      {isReordering ? 'Done' : 'Reorder'}
-                    </button>
-                    <button
-                      className="btn btn-ghost btn-sm join-item"
-                      onClick={() => setShowCategoryManager(false)}
-                    >
-                      Close
-                    </button>
-                  </div>
-                </div>
-
-                {/* List with drag-and-drop */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {(isReordering
-                    ? orderDraft
-                        .map((id) => categories.find((c) => c.id === id)!)
-                        .filter(Boolean)
-                    : categories
-                  ).map((c) => (
-                    <div
-                      key={c!.id}
-                      className={`card border border-base-300 shadow-sm transition-all ${
-                        isReordering ? 'cursor-move hover:shadow-md' : ''
-                      }`}
-                      draggable={isReordering}
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('text/plain', c!.id);
-                      }}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        if (!isReordering) return;
-                        const from = e.dataTransfer.getData('text/plain');
-                        const to = c!.id;
-                        if (!from || from === to) return;
-                        setOrderDraft((prev) => {
-                          const arr = prev.slice();
-                          const fromIdx = arr.indexOf(from);
-                          const toIdx = arr.indexOf(to);
-                          if (fromIdx === -1 || toIdx === -1) return prev;
-                          arr.splice(toIdx, 0, ...arr.splice(fromIdx, 1));
-                          return arr;
-                        });
-                      }}
-                    >
-                      <div className="card-body p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="badge gap-1"
-                              style={{
-                                backgroundColor: c!.color,
-                                color: '#fff',
-                              }}
-                            >
-                              {(() => {
-                                const key = (c!.icon || 'Tag') as IconKey;
-                                const Icon = ICONS[key] || Tag;
-                                return <Icon size={12} />;
-                              })()}
-                              {c!.name}
-                            </div>
-                          </div>
-                          <div className="join">
-                            <button
-                              className="btn btn-ghost btn-xs join-item"
-                              onClick={async () => {
-                                // open edit modal prefilled
-                                setShowCategoryModal(true);
-                                setEditingCategoryId(c!.id);
-                                setDraftCategory({
-                                  name: c!.name,
-                                  color: c!.color,
-                                });
-                                setIconDraft(
-                                  (c!.icon || 'Tag') as keyof typeof ICONS
-                                );
-                                setPreset('Custom');
-                                // Optional: store editing state if you want separate edit
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="btn btn-ghost btn-xs join-item text-error"
-                              onClick={() => setCategoryToDelete(c!)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Save order */}
-                {isReordering && (
-                  <div className="card-actions justify-end mt-6">
-                    <button
-                      className="btn btn-primary"
-                      onClick={async () => {
-                        // optimistic reorder
-                        const prevCats = categories.slice();
-                        const reordered = orderDraft
-                          .map((id) => categories.find((c) => c.id === id)!)
-                          .filter(Boolean)
-                          .map((c, idx) => ({ ...c, sortOrder: idx }));
-                        setCategories(reordered);
-                        setJSON('categories', reordered);
-                        const res = await fetch('/api/categories/reorder', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ order: orderDraft }),
-                        });
-                        if (!res.ok) {
-                          setCategories(prevCats);
-                          setJSON('categories', prevCats);
-                          return toast.error('Save order failed');
-                        }
-                        toast.success('Order saved');
-                        setIsReordering(false);
-                      }}
-                    >
-                      Save Order
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </Fade>
-      )}
-
-      {/* Delete Category Confirmation Modal */}
-      {categoryToDelete && (
-        <Fade in={!!categoryToDelete}>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="card w-full max-w-md bg-base-100 shadow-2xl border border-base-300 animate-in zoom-in-90 duration-300">
-              <div className="card-body p-6 text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="w-16 h-16 bg-error/20 rounded-full flex items-center justify-center">
-                    <svg
-                      className="w-8 h-8 text-error"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </div>
-                </div>
-                <h3 className="text-lg font-semibold mb-2">Delete Category</h3>
-                <p className="text-base-content/70 mb-1">
-                  Are you sure you want to delete this category?
-                </p>
-                <p className="font-medium text-sm mb-6">
-                  &ldquo;{categoryToDelete.name}&rdquo;
-                </p>
-                <div className="flex gap-3 justify-center">
-                  <button
-                    className="btn btn-ghost"
-                    onClick={() => setCategoryToDelete(null)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="btn btn-error"
-                    onClick={async () => {
-                      const target = categoryToDelete;
-                      if (!target) return;
-                      // optimistic remove
-                      const prevCats = categories.slice();
-                      const nextCats = categories.filter(
-                        (c) => c.id !== target.id
-                      );
-                      setCategories(nextCats);
-                      setJSON('categories', nextCats);
-                      setCategoryToDelete(null);
-                      const res = await fetch(`/api/categories/${target.id}`, {
-                        method: 'DELETE',
-                      });
-                      if (!res.ok) {
-                        setCategories(prevCats);
-                        setJSON('categories', prevCats);
-                        return toast.error('Delete failed');
-                      }
-                      toast.success('Category removed');
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Fade>
-      )}
+      {/* Category deletion is disabled for fixed presets */}
     </MuiThemeProvider>
   );
 }

@@ -67,22 +67,19 @@ Auth
 Notes
 
 - GET `/api/notes`
-  - Query: `q?`, `categoryIds?` (csv), `searchIn?` (title,content,category)
-  - Response: Note[] with `category`
+  - Query: `q?`, `categories?` (csv of names), `categoryKeys?` (csv of preset keys), `searchIn?` (title,content,category)
+  - Response: Note[]
 - POST `/api/notes`
-  - Body: `{ title: string; content: string; categoryId?: string | null }`
+  - Body: `{ title: string; content: string; category?: string | null, categoryKey?: string | null }`
+  - Behavior: if both category and categoryKey are missing, defaults to "Personal"
 - PUT `/api/notes/:id`
-  - Body: `{ title?: string; content?: string; categoryId?: string | null }`
+  - Body: `{ title?: string; content?: string; category?: string | null }`
 - DELETE `/api/notes/:id`
 
 Categories
 
-- GET `/api/categories` → ordered by `sortOrder asc, name asc`
-- POST `/api/categories` → `{ name: string; color?: string; icon?: string }`
-- PUT `/api/categories/:id` → `{ name?, color?, icon?, sortOrder? }`
-- DELETE `/api/categories/:id`
-- POST `/api/categories/reorder` → `{ order: string[] }`
-- POST `/api/categories/init` → `{ created: number }`
+- GET `/api/categories` → returns preset categories (key, name, color, icon)
+  - Note: Categories are fixed client-side presets; creation/edit/delete/reorder is disabled.
 
 Health
 
@@ -90,8 +87,7 @@ Health
 
 Models (Prisma)
 
-- Note: `{ id, title, content, createdAt, updatedAt, userId, categoryId? }`
-- Category: `{ id, name, color, icon, sortOrder, createdAt, updatedAt, userId }`
+- Note: `{ id, title, content, createdAt, updatedAt, userId, category }`
 
 ## Deploy (Vercel)
 

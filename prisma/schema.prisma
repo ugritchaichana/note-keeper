@@ -13,15 +13,17 @@ datasource db {
 }
 
 model Category {
+  // Deprecated: Categories are now client-side presets only
+  // This model is intentionally left here for reference but will not be used.
+  // You can drop this model from the database via migration; see generated migration.
   id        String   @id @default(uuid())
   name      String
-  color     String   @default("#a3a3a3") // hex color for badge
-  icon      String   @default("Tag") // lucide icon name
+  color     String   @default("#a3a3a3")
+  icon      String   @default("Tag")
   sortOrder Int      @default(0)
   userId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  notes     Note[]
 }
 
 model Note {
@@ -31,6 +33,5 @@ model Note {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   userId     String
-  categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id])
+  category   String    @default("Personal") // category name from client presets
 }

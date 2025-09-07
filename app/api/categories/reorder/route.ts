@@ -1,23 +1,9 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { createClient } from '@/lib/supabase/server';
 
-export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  const user = data.user;
-  if (!user)
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { order } = (await req.json()) as { order: string[] };
-  // update in a transaction
-  await prisma.$transaction(
-    order.map((id, idx) =>
-      prisma.category.update({
-        where: { id, userId: user.id },
-        data: { sortOrder: idx },
-      })
-    )
+// Deprecated: categories are fixed client-side presets. Reorder is disabled.
+export async function POST() {
+  return NextResponse.json(
+    { error: 'Category reorder is disabled (presets only).' },
+    { status: 410 }
   );
-  return NextResponse.json({ ok: true });
 }

@@ -87,7 +87,7 @@ Navigate to http://localhost:3000
 
 First-time notes/categories:
 
-- Categories presets auto-initialize on demand. You can also POST `/api/categories/init` to force initialization.
+- Categories are fixed client-side presets; no initialization needed. The API exposes them read-only at `/api/categories` for convenience.
 
 ## 7) Build and start (production)
 

@@ -10,19 +10,21 @@ Notes
 
   - Query params:
     - q: string (optional) — keyword search across title, content, category name
-    - categoryIds: csv string (optional) — filter by category ids
+    - categories: csv string (optional) — filter by category names
+    - categoryKeys: csv string (optional) — filter by preset keys
     - searchIn: csv (optional) — any of title,content,category (default: title,category,content)
-  - Response 200: Note[] with embedded category
+  - Response 200: Note[]
   - Sort: updatedAt desc
 
 - POST /api/notes
 
-  - Body: { title: string; content: string; categoryId?: string | null }
-  - Response 201: created Note (without embedded category)
+  - Body: { title: string; content: string; category?: string | null, categoryKey?: string | null }
+  - Behavior: If both are missing/null, defaults to "Personal".
+  - Response 201: created Note
 
 - PUT /api/notes/:id
 
-  - Body: { title?: string; content?: string; categoryId?: string | null }
+  - Body: { title?: string; content?: string; category?: string | null }
   - Response 200: updated Note
 
 - DELETE /api/notes/:id
@@ -32,35 +34,12 @@ Categories
 
 - GET /api/categories
 
-  - Response 200: Category[] ordered by sortOrder asc, name asc
-
-- POST /api/categories
-
-  - Body: { name: string; color?: string; icon?: string }
-  - Response 201: created Category
-
-- PUT /api/categories/:id
-
-  - Body: { name?: string; color?: string; icon?: string; sortOrder?: number }
-  - Response 200: updated Category
-
-- DELETE /api/categories/:id
-
-  - Response 200: { ok: true }
-
-- POST /api/categories/reorder
-
-  - Body: { order: string[] } — array of category ids in the new order
-  - Response 200: { ok: true }
-
-- POST /api/categories/init
-  - Initializes the user’s missing preset categories. Idempotent.
-  - Response 200: { created: number }
+  - Response 200: Preset categories (key, name, color, icon)
+  - Note: Categories are fixed client-side presets; creation/editing/deletion is disabled.
 
 Models (Prisma)
 
-- Note { id, title, content, createdAt, updatedAt, userId, categoryId? }
-- Category { id, name, color, icon, sortOrder, createdAt, updatedAt, userId }
+- Note { id, title, content, createdAt, updatedAt, userId, category }
 
 Common Responses
 

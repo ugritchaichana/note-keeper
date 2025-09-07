@@ -40,9 +40,20 @@ export function SignUpForm({
     }
 
     try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ??
+        (typeof window !== 'undefined' ? window.location.origin : undefined);
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: baseUrl
+          ? {
+              // After email confirmation, Supabase will redirect back here.
+              // Our /auth/confirm route will exchange the code for a session
+              // and then send the user to '/'.
+              emailRedirectTo: `${baseUrl}/auth/confirm`,
+            }
+          : undefined,
       });
       if (error) throw error;
       if (data.session) {
